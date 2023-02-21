@@ -156,6 +156,7 @@ enum Builtin {
     Foreign(Foreign),
     Num2Sample,
     Phase,
+    Choose,
     Op1(UnOp),
     Op2(BinOp),
     Cmp(Comparison),
@@ -208,6 +209,7 @@ enum Comparison {
 struct Foreign {
     name: &'static str,
     has_sound_receiver: bool,
+    is_intrinsic: bool,
     llvm_ty: HideDbg<for<'c> fn(&ContextRef<'c>) -> AnyTypeEnum<'c>>,
     local_ty: (Type, Vec<Type>),
 }
@@ -339,6 +341,8 @@ impl Units {
             (l, Add | Sub | Mod, r) => {
                 if l == r {
                     Some(l)
+                } else if l == Dimensionless || r == Dimensionless {
+                    Some(Dimensionless)
                 } else {
                     None
                 }
@@ -446,7 +450,8 @@ impl Compiler {
         Ok(match tok.value.as_str() {
             "void" => Type::Unit,
             "sample" => Type::Sample,
-            "num" => Type::Number(Dimensionless),
+            "num" | "number" => Type::Number(Dimensionless),
+            "bool" | "boolean" => Type::Boolean,
             s if Units::from_name(s).is_some() => Type::Number(Units::from_name(s).unwrap()),
             s => Err(tok.span().err(format!("unknown type: '{}'", s)))?,
         })
@@ -486,7 +491,7 @@ impl Compiler {
                     ret_ty,
                     ..
                 } => {
-                    let name = name.value.to_owned();
+                    let name_s = name.value.to_owned();
                     let ty = match f_ty.value.as_str() {
                         "pure" => FuncType::Pure,
                         "oscillator" => FuncType::Oscillator,
@@ -495,10 +500,10 @@ impl Compiler {
                             "Invalid function type, must be one of: 'pure', 'oscillator', 'sound'",
                         ))?,
                     };
-                    self.funcs.insert(
-                        name.clone(),
+                    let old = self.funcs.insert(
+                        name_s.clone(),
                         Func {
-                            name: Rc::new(name),
+                            name: Rc::new(name_s),
                             registers: Vec::new(),
                             blocks: Vec::new(),
                             ty,
@@ -514,6 +519,18 @@ impl Compiler {
                                 .collect::<Result<Vec<_>, _>>()?,
                         },
                     );
+                    if old.is_some() {
+                        Err(name
+                            .span()
+                            .err(format!(
+                                "duplicate definition of a function named '{}'",
+                                name.value
+                            ))
+                            .note(
+                                NoteKind::Note,
+                                "there can only be one function with a given name",
+                            ))?;
+                    }
                 }
             }
         }
@@ -846,88 +863,131 @@ impl Compiler {
                 true
             };
         }
+        macro_rules! builtin_name {
+            (in trinsic $name:ident $not_name:ident) => {
+                concat!("llvm.", stringify!($name))
+            };
+            (in trinsic $name:ident) => {
+                concat!("llvm.", stringify!($name))
+            };
+            ($name:ident) => {
+                concat!("yhim_", stringify!($name))
+            };
+        }
         macro_rules! builtins {
-            ($(fn $(($recv:ty))? $name:ident($($arg_ty:ty$(:$units:expr)?),*) -> $ret:ty$(:$ret_units:expr)?),*$(,)?) => {
-                if let Some(foreign) = match name { $(
-                    concat!(stringify!($name)) => Some(Foreign {
-                        local_ty: (local_ty!($ret$(:$ret_units)?), vec![$(local_ty!($arg_ty$(:$units)?),)*]),
-                        llvm_ty: HideDbg(llvm::get_llvm_ty::<extern "C" fn($(*mut $recv,)? $($arg_ty),*) -> $ret>()),
-                        name: concat!("yhim_", stringify!($name)),
-                        has_sound_receiver: is_present!($($recv)?)
-                    })
-                ),*,
-                    _ => None
-                } {
-                    if args.len() != foreign.local_ty.1.len() {
-                        Err(ce.span(None).err(format!(
-                            "wrong number of arguments, '{}' expected: {}, but given: {}",
-                            name,
-                            foreign.local_ty.1.len(),
-                            args.len()
-                        )))?
+            ($(fn $(($recv:ty))? $([in $trinsic:ident $($intr_name:ident)?])? $name:ident($($arg_ty:ty$(:$units:expr)?),*) -> $ret:ty$(:$ret_units:expr)?),*$(,)?) => {
+                {
+                    $($({
+                        let name = builtin_name!(in $trinsic $($intr_name)? $name);
+                        debug_assert!(inkwell::intrinsics::Intrinsic::find(name).is_some(), "{} is not an intrinsic", name);
+                    })?)*
+                    if let Some(foreign) = match name { $(
+                        concat!(stringify!($name)) => Some(Foreign {
+                            local_ty: (local_ty!($ret$(:$ret_units)?), vec![$(local_ty!($arg_ty$(:$units)?),)*]),
+                            llvm_ty: HideDbg(llvm::get_llvm_ty::<extern "C" fn($(*mut $recv,)? $($arg_ty),*) -> $ret>()),
+                            name: builtin_name!($(in $trinsic $($intr_name)?)? $name),
+                            has_sound_receiver: is_present!($($recv)?),
+                            is_intrinsic: is_present!($($trinsic)?)
+                        })
+                    ),*,
+                        _ => None
+                    } {
+                        if args.len() != foreign.local_ty.1.len() {
+                            Err(ce.span(None).err(format!(
+                                "wrong number of arguments, '{}' expected: {}, but given: {}",
+                                name,
+                                foreign.local_ty.1.len(),
+                                args.len()
+                            )))?
+                        }
+                        for ((reg, ty), arg) in args
+                            .iter_mut()
+                            .zip(foreign.local_ty.1.iter())
+                            .zip(ce.args.iter())
+                        {
+                            self.coerce(ib, "function argument requires", &ty, reg, arg)?;
+                        }
+                        if foreign.has_sound_receiver && ib.func.ty != FuncType::Sound {
+                            Err(ce
+                                .callee
+                                .span()
+                                .err("sound functions must not be called from non-sound functions")
+                                .note(NoteKind::Hint, "don't"))?
+                        }
+                        return Ok((
+                            foreign.local_ty.0.clone(),
+                            Callee::Builtin(Builtin::Foreign(foreign)),
+                            false,
+                        ));
                     }
-                    for ((reg, ty), arg) in args
-                        .iter_mut()
-                        .zip(foreign.local_ty.1.iter())
-                        .zip(ce.args.iter())
-                    {
-                        self.coerce(ib, "function argument requires", &ty, reg, arg)?;
-                    }
-                    if foreign.has_sound_receiver && ib.func.ty != FuncType::Sound {
-                        Err(ce
-                            .callee
-                            .span()
-                            .err("sound functions must not be called from non-sound functions")
-                            .note(NoteKind::Hint, "don't"))?
-                    }
-                    return Ok((
-                        foreign.local_ty.0.clone(),
-                        Callee::Builtin(Builtin::Foreign(foreign)),
-                        false,
-                    ));
                 }
             };
         }
         match name {
-            "phase" => {
-                if ib.func.ty != FuncType::Oscillator {
+            "phase" | "choose" => {
+                if name == "choose" && ib.func.ty != FuncType::Oscillator {
                     Err(ce
                         .span(None)
                         .err("the 'phase' function is only available in oscillators"))?
                 }
-                if ce.args.len() != 0 {
+                let num_args = if name == "choose" { 3 } else { 0 };
+                if ce.args.len() != num_args {
                     Err(ce.span(None).err(format!(
-                        "wrong number of arguments, 'phase' expected: 0, but given: {}",
+                        "wrong number of arguments, 'phase' expected: {}, but given: {}",
+                        num_args,
                         ce.args.len()
                     )))?;
                 }
-                return Ok((
-                    Type::Number(Dimensionless),
-                    Callee::Builtin(Builtin::Phase),
-                    false,
-                ));
+                return Ok(if name == "choose" {
+                    self.coerce(
+                        ib,
+                        "function argument requires",
+                        &Type::Boolean,
+                        &mut args[0],
+                        &ce.args[0],
+                    )?;
+                    let ty = ib.func[args[1]].clone();
+                    self.coerce(
+                        ib,
+                        "first argument to choose was",
+                        &ty,
+                        &mut args[2],
+                        &ce.args[0],
+                    )?;
+                    (ty, Callee::Builtin(Builtin::Choose), false)
+                } else {
+                    (
+                        Type::Number(Dimensionless),
+                        Callee::Builtin(Builtin::Phase),
+                        false,
+                    )
+                });
             }
             _ => {}
         }
         use Units::*;
         builtins!(
-            fn time_phase(f64:Seconds, f64:Hertz) -> f64,
-
             fn dbg(f64) -> f64,
 
-            fn sin(f64) -> f64,
-            fn cos(f64) -> f64,
-            fn exp(f64) -> f64,
-            fn sqrt(f64) -> f64,
-            fn ln(f64) -> f64,
-            fn log(f64, f64) -> f64,
-            fn pow(f64, f64) -> f64,
-
-            fn min(f64, f64) -> f64,
-            fn max(f64, f64) -> f64,
-            fn choose(bool, f64, f64) -> f64,
+            fn [in trinsic] sqrt(f64) -> f64,
+            fn [in trinsic] sin(f64) -> f64,
+            fn [in trinsic] cos(f64) -> f64,
+            fn [in trinsic] pow(f64, f64) -> f64,
+            fn [in trinsic] exp(f64) -> f64,
+            fn [in trinsic] exp2(f64) -> f64,
+            fn [in trinsic log] ln(f64) -> f64,
+            fn [in trinsic] log10(f64) -> f64,
+            fn [in trinsic] log2(f64) -> f64,
+            fn [in trinsic fabs] abs(f64) -> f64,
+            fn [in trinsic minnum] min(f64, f64) -> f64,
+            fn [in trinsic maxnum] max(f64, f64) -> f64,
+            fn [in trinsic] copysign(f64, f64) -> f64,
+            fn [in trinsic] floor(f64) -> f64,
+            fn [in trinsic] ceil(f64) -> f64,
+            fn [in trinsic] round(f64) -> f64,
 
             fn pan(SampleTy, f64) -> SampleTy,
+            fn time_phase(f64:Seconds, f64:Hertz) -> f64,
 
             fn (SoundRecvTy) mix(SampleTy) -> (),
             fn (SoundRecvTy) next() -> (),
@@ -1645,17 +1705,28 @@ pub mod llvm {
                                                 );
                                             }
                                             Foreign(f) => {
-                                                let fv = self
-                                                    .module
-                                                    .get_function(f.name)
-                                                    .unwrap_or_else(|| {
-                                                        self.module.add_function(
-                                                            f.name,
-                                                            f.llvm_ty.0(&self.ctx())
-                                                                .into_function_type(),
-                                                            Some(External),
-                                                        )
-                                                    });
+                                                let fv = if f.is_intrinsic {
+                                                    let intr = Intrinsic::find(f.name).unwrap();
+                                                    let f_ty: FunctionType =
+                                                        f.llvm_ty.0(&self.ctx())
+                                                            .into_function_type();
+                                                    intr.get_declaration(
+                                                        self.module,
+                                                        f_ty.get_param_types().as_slice(),
+                                                    )
+                                                    .unwrap()
+                                                } else {
+                                                    self.module.get_function(f.name).unwrap_or_else(
+                                                        || {
+                                                            self.module.add_function(
+                                                                f.name,
+                                                                f.llvm_ty.0(&self.ctx())
+                                                                    .into_function_type(),
+                                                                Some(External),
+                                                            )
+                                                        },
+                                                    )
+                                                };
                                                 if f.has_sound_receiver {
                                                     arg_vec.insert(
                                                         0,
@@ -1909,7 +1980,7 @@ pub mod llvm {
                                                             Type::Number(Units::Decibels),
                                                         ) => {
                                                             op = op.logarithmise();
-                                                            |s, b, f| rval_sf::<10, 10>(s, b, f)
+                                                            |s, b, f| rval_sf::<10, 20>(s, b, f)
                                                         }
                                                         (
                                                             Type::Number(Units::Hertz),
@@ -2040,6 +2111,17 @@ pub mod llvm {
                                             }
                                             Phase => {
                                                 ib.build_store(ll_registers[out.0], phase.unwrap());
+                                            }
+                                            Choose => {
+                                                ib.build_store(
+                                                    ll_registers[out.0],
+                                                    ib.build_select(
+                                                        load_vec[0].into_int_value(),
+                                                        load_vec[1],
+                                                        load_vec[2],
+                                                        "s",
+                                                    ),
+                                                );
                                             }
                                         }
                                     }

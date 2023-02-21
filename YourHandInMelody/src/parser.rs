@@ -405,10 +405,11 @@ where
                         },
                         c,
                     ),
-                    'a'..='z' | 'A'..='Z' | '_' => {
+                    c if c.is_alphabetic() || c == '_' => {
                         let mut tok = collect_token!(
                             Ident,
-                            Ok('a'..='z' | 'A'..='Z' | '_' | '0'..='9' | '|' | '?' | '!')
+                            Ok(c)
+                            if c.is_alphanumeric() || matches!(c, '♯' | '♭' | '_' | '?' | '!')
                         );
                         let ty = match tok.value.as_str() {
                             "for" => KwFor,

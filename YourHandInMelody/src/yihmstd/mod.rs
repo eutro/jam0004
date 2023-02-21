@@ -13,41 +13,6 @@ extern "C" fn yhim_time_phase(time: f64, freq: f64) -> f64 {
     ((time * freq) % 1.) * TAU
 }
 
-#[no_mangle]
-extern "C" fn yhim_sin(theta: f64) -> f64 {
-    theta.sin()
-}
-
-#[no_mangle]
-extern "C" fn yhim_cos(theta: f64) -> f64 {
-    theta.cos()
-}
-
-#[no_mangle]
-extern "C" fn yhim_exp(x: f64) -> f64 {
-    x.exp()
-}
-
-#[no_mangle]
-extern "C" fn yhim_sqrt(x: f64) -> f64 {
-    x.sqrt()
-}
-
-#[no_mangle]
-extern "C" fn yhim_ln(x: f64) -> f64 {
-    x.ln()
-}
-
-#[no_mangle]
-extern "C" fn yhim_log(x: f64, base: f64) -> f64 {
-    x.log(base)
-}
-
-#[no_mangle]
-extern "C" fn yhim_pow(base: f64, x: f64) -> f64 {
-    base.powf(x)
-}
-
 #[derive(Clone)]
 #[repr(C)]
 struct Array {
@@ -153,16 +118,6 @@ extern "C" fn yhim_dbg(f: f64) -> f64 {
 }
 
 #[no_mangle]
-extern "C" fn yhim_min(x: f64, y: f64) -> f64 {
-    x.min(y)
-}
-
-#[no_mangle]
-extern "C" fn yhim_max(x: f64, y: f64) -> f64 {
-    x.max(y)
-}
-
-#[no_mangle]
 extern "C" fn yhim_choose(p: bool, x: f64, y: f64) -> f64 {
     if p {
         x
@@ -187,16 +142,10 @@ pub fn add_symbols() {
     }
     for (name, ptr) in syms![
         yhim_time_phase,
-        yhim_sin,
-        yhim_cos,
-        yhim_exp,
-        yhim_sqrt,
         yhim_dbg,
         yhim_newarray,
         yhim_duparray,
         yhim_droparray,
-        yhim_min,
-        yhim_max,
         yhim_choose,
         yhim_pan,
         yhim_mix,

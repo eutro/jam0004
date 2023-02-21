@@ -20,13 +20,18 @@ use inkwell::debug_info::{DWARFEmissionKind, DWARFSourceLanguage};
 use inkwell::execution_engine::JitFunction;
 use inkwell::OptimizationLevel;
 
+/// Command line compiler for the Your Hand in Melody language.
 #[derive(Parser, Debug)]
+#[command(author, version)]
 struct Args {
     /// The list of files to compile.
     files: Vec<PathBuf>,
-    #[arg(long, short, value_enum, default_value_t = Emit::Llvm)]
+    #[arg(long, short, value_enum, default_value_t = Emit::Sound)]
     /// What to output.
     emit: Emit,
+    /// Where to output.
+    #[arg(long, short)]
+    out: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -241,7 +246,9 @@ fn main() {
             .unwrap_or_else(|| Cow::from("unknown")),
     );
     module.set_source_file_name(&main_file.to_string_lossy());
-    let main_file_dbg = main_file.canonicalize().unwrap_or_else(|_| main_file.clone());
+    let main_file_dbg = main_file
+        .canonicalize()
+        .unwrap_or_else(|_| main_file.clone());
     let mut ll_cc = LLVMCompiler::new(cc, &module);
     let di = ll_cc.module.create_debug_info_builder(
         true,
@@ -257,7 +264,7 @@ fn main() {
             .unwrap_or_else(|| "/".to_owned())
             .as_str(),
         "yhim",
-        true,
+        false,
         "",
         0,
         "",
@@ -269,47 +276,50 @@ fn main() {
         "yhim",
     );
     ll_cc.dib = Some(di);
-    ll_cc.compile().unwrap();
 
-    match args.emit {
-        Emit::Llvm => {
-            report_any_errors(&main_file, || {
-                let mut buf = main_file.clone();
-                if !buf.set_extension("ll") {
-                    bail!("could not decide on output file, please specify manually");
-                }
+    report_any_errors(&main_file, || {
+        ll_cc.compile()?;
+        let out_file = args.out.map(Ok).unwrap_or_else(|| {
+            let mut buf = main_file.clone();
+            let ext = match args.emit {
+                Emit::Llvm => "ll",
+                Emit::Sound => "wav",
+            };
+            if !buf.set_extension(ext) {
+                bail!("could not set extension, please specify output file manually");
+            }
+            Ok(buf)
+        })?;
+        match args.emit {
+            Emit::Llvm => {
                 module
-                    .print_to_file(&buf)
+                    .print_to_file(&out_file)
                     .map_err(|err| anyhow!("{}", err))?;
-                println!(
-                    "{}: {}",
-                    "output to file".green().bold(),
-                    buf.to_string_lossy()
-                );
-                Ok(())
-            });
-        }
-        Emit::Sound => {
-            report_any_errors(&main_file, || {
-                let mut file = main_file.clone();
-                if !file.set_extension("wav") {
-                    bail!("could not decide on output file, please specify manually");
-                }
-
+            }
+            Emit::Sound => {
                 add_symbols();
                 let jit = module
                     .create_jit_execution_engine(OptimizationLevel::Aggressive)
                     .map_err(|e| anyhow!("{}", e))?;
+                let main_fn = module.get_function("main_sound").ok_or_else(|| {
+                    anyhow!("'main' sound function not present, please provide one")
+                })?;
+                if main_fn.get_type().count_param_types() != 1 {
+                    bail!("'main' sound function must not have parameters");
+                }
                 let buf = unsafe {
+                    // SAFETY: we just checked for parameters, and sound functions return void
                     let main: JitFunction<unsafe extern "C" fn(SoundRecv) -> ()> =
                         jit.get_function("main_sound")?;
                     let recv = SoundRecv::new();
+                    // SAFETY: the compiler has no bugs
                     main.call(recv.clone());
+                    // SAFETY: the buffer can't have escaped
                     recv.into_buf()
                 };
 
                 let mut writer = hound::WavWriter::create(
-                    &file,
+                    &out_file,
                     WavSpec {
                         channels: 2,
                         sample_rate: SAMPLE_RATE,
@@ -322,13 +332,13 @@ fn main() {
                     writer.write_sample(s.1 as f32)?;
                 }
                 writer.finalize()?;
-                println!(
-                    "{}: {}",
-                    "output to file".green().bold(),
-                    file.to_string_lossy()
-                );
-                Ok(())
-            });
-        }
-    }
+            }
+        };
+        println!(
+            "{}: {}",
+            "output to file".green().bold(),
+            out_file.to_string_lossy()
+        );
+        Ok(())
+    });
 }
