@@ -45,6 +45,53 @@ sound main() {
 
 Read on for documentation and examples.
 
+## Contents
+
+- [Your Hand in Melody](#your-hand-in-melody)
+  * [Contents](#contents) 
+  * [Build and Usage](#build-and-usage)
+  * [Overview](#overview)
+    + [Structure](#structure)
+    + [Comments](#comments)
+    + [Statements](#statements)
+    + [Expressions](#expressions)
+    + [Types](#types)
+      - [Coercions](#coercions)
+  * [Reference](#reference)
+    + [Functions](#functions)
+      - [`phase(): number`](#-phase----number-)
+      - [`choose(cond: bool, if_true: T, if_false: T): T`](#-choose-cond--bool--if-true--t--if-false--t---t-)
+      - [`dbg(n: number): number`](#-dbg-n--number---number-)
+      - [`pan(s: sample, azimuth: num): sample`](#-pan-s--sample--azimuth--num---sample-)
+      - [`time_phase(time: seconds, freq: hertz): number`](#-time-phase-time--seconds--freq--hertz---number-)
+      - [`mix(s: sample)`](#-mix-s--sample--)
+        * [Samples, the Sample Counter](#samples--the-sample-counter)
+      - [`next()`](#-next---)
+      - [`skip(n: number)`](#-skip-n--number--)
+      - [`sqrt(x: number): number`](#-sqrt-x--number---number-)
+      - [`sin(x: number): number`](#-sin-x--number---number-)
+      - [`cos(x: number): number`](#-cos-x--number---number-)
+      - [`pow(base: number, exponent: number): number`](#-pow-base--number--exponent--number---number-)
+      - [`exp(x: number): number`](#-exp-x--number---number-)
+      - [`exp2(x: number): number`](#-exp2-x--number---number-)
+      - [`ln(x: number): number`](#-ln-x--number---number-)
+      - [`log10(x: number): number`](#-log10-x--number---number-)
+      - [`log2(x: number): number`](#-log2-x--number---number-)
+      - [`abs(x: number): number`](#-abs-x--number---number-)
+      - [`min(a: number, b: number): number`](#-min-a--number--b--number---number-)
+      - [`max(a: number, b: number): number`](#-max-a--number--b--number---number-)
+      - [`copysign(a: number, b: number): number`](#-copysign-a--number--b--number---number-)
+      - [`floor(x: number): number`](#-floor-x--number---number-)
+      - [`ceil(x: number): number`](#-ceil-x--number---number-)
+      - [`round(x: number)`](#-round-x--number--)
+    + [Constants](#constants)
+      - [`SAMPLE_RATE: hertz = 44100`](#-sample-rate--hertz---44100-)
+      - [`SAMPLE_PERIOD: seconds = 1/44100`](#-sample-period--seconds---1-44100-)
+      - [`E: number`](#-e--number-)
+      - [`PI: number`](#-pi--number-)
+      - [`TAU: number`](#-tau--number-)
+      - [`C4`, `A4`, `G♯5`, `[A-G][♯♭sf]?[0-9]: hertz`](#-c4----a4----g-5-----a-g----sf---0-9---hertz-)
+
 ## Build and Usage
 
 To build, you will need [Rust](https://www.rust-lang.org/) installed. You will also need LLVM 15.0 installed in a way
@@ -69,7 +116,8 @@ you catch bugs, metaphorically leaving one hand free to deal with other things.
 
 A YHiM program can be executed if it has a `main()` sound function, which will be played.
 [sample counter] counter is also an essential read.
-I highly recommend [VLC Media Player](https://www.videolan.org/vlc/) for
+I highly recommend [VLC Media Player](https://www.videolan.org/vlc/) for playing the generated
+audio files, since it automatically reopens them if they change.
 
 ### Structure
 
@@ -105,7 +153,7 @@ sound baz(s: num, phase: num) {
 ```
 
 ### Comments
-```c
+```rust
 // Comments can be line comments
 /* or they can be
    multiline
@@ -233,30 +281,30 @@ Available in `oscillator` functions.
 
 Returns the phase the oscillator was sampled at (with the `at` keyword).
 
-### `choose(cond: bool, if_true: T, if_false: T): T`
+#### `choose(cond: bool, if_true: T, if_false: T): T`
 Returns `if_true` if `cond` is true, or `if_false` if it is false.
 `if_true` and `if_false` can be any types, as long as they are the same.
 
-### `dbg(n: number): number`
+#### `dbg(n: number): number`
 Print `n` to standard output, for debugging.
 
-### `pan(s: sample, azimuth: num): sample`
+#### `pan(s: sample, azimuth: num): sample`
 Returns the sample panned left (-1 < `azimuth` < 0)
 or right (1 > `azimuth` > 0),
 making it sound as though it came from the given position.
 
-### `time_phase(time: seconds, freq: hertz): number`
+#### `time_phase(time: seconds, freq: hertz): number`
 Given a time and a frequency, return the phase an oscillator
 of the given frequency should be at, at that time.
 This is equivalent to the formula `((time * freq) % 1.) * TAU`.
 
-### `mix(s: sample)`
+#### `mix(s: sample)`
 Available in `sound` functions.
 
 Output the given sample at the time indicated by the [sample counter],
 adding it to the currently recorded value for the sample, if any.
 
-#### Samples, the Sample Counter
+##### Samples, the Sample Counter
 A [sample] is a unit of sound. Sound, as I hope you know, is a wave.
 When this is represented digitally, the wave is split at equal intervals,
 and the amplitude of the wave is taken at each point.
@@ -273,90 +321,90 @@ execute "asynchronously", the called function may have outputted samples
 [sample]: https://en.wikipedia.org/wiki/Sampling_(signal_processing)
 [sample counter]: #samples-the-sample-counter
 
-### `next()`
+#### `next()`
 Available in `sound` functions.
 
 Increment the [sample counter] by one. Future calls to `mix` will output to the next sample,
 and calls to other `sound` functions will start at the new sample counter.
 
-### `skip(n: number)`
+#### `skip(n: number)`
 Available in `sound` functions.
 
 Increment the [sample counter] by `n`, rounded down.
 
-### `sqrt(x: number): number`
+#### `sqrt(x: number): number`
 Returns the square root of `x`.
 
-### `sin(x: number): number`
+#### `sin(x: number): number`
 Returns the sine of `x`.
 
-### `cos(x: number): number`
+#### `cos(x: number): number`
 Returns the cosine of `x`.
 
-### `pow(base: number, exponent: number): number`
+#### `pow(base: number, exponent: number): number`
 Returns `base` to the power of `exponent`.
 
-### `exp(x: number): number`
+#### `exp(x: number): number`
 Returns [e]
 to the power of `x`.
 
 [e]: https://en.wikipedia.org/wiki/E_(mathematical_constant)
 
-### `exp2(x: number): number`
+#### `exp2(x: number): number`
 Returns 2 to the power of `x`.
 
-### `ln(x: number): number`
+#### `ln(x: number): number`
 Returns the natural logarithm of `x`.
 
-### `log10(x: number): number`
+#### `log10(x: number): number`
 Returns the base 10 logarithm of `x`.
 
-### `log2(x: number): number`
+#### `log2(x: number): number`
 Returns the base 2 logarithm of `x`.
 
-### `abs(x: number): number`
+#### `abs(x: number): number`
 Returns the absolute value of `x`.
 That is, `x` if it is positive, or `-x` if it is negative.
 
-### `min(a: number, b: number): number`
+#### `min(a: number, b: number): number`
 Returns the minimum of `a` and `b`.
 That is, `a` if it is smaller than `b`, or `b` otherwise.
 
-### `max(a: number, b: number): number`
+#### `max(a: number, b: number): number`
 Returns the maximum of `a` and `b`.
 That is, `a` if it is larger than `b`, or `b` otherwise.
 
-### `copysign(a: number, b: number): number`
+#### `copysign(a: number, b: number): number`
 Returns `a`, but with its sign replaced by that of `b`.
 
-### `floor(x: number): number`
+#### `floor(x: number): number`
 Returns the floor of `x`.
 That is, the largest integral value that is not greater than x.
 
-### `ceil(x: number): number`
+#### `ceil(x: number): number`
 Returns the ceil of `x`.
 That is, the smallest integral value that is not less than x.
 
-### `round(x: number)`
+#### `round(x: number)`
 Returns the nearest integral value to `x`, rounding away from 0.
 
-## Constants
-### `SAMPLE_RATE: hertz = 44100`
+### Constants
+#### `SAMPLE_RATE: hertz = 44100`
 The number of samples per second.
 
-### `SAMPLE_PERIOD: seconds = 1/44100`
+#### `SAMPLE_PERIOD: seconds = 1/44100`
 The duration of a sample in seconds.
 
-### `E: number`
+#### `E: number`
 Euler's number, [e].
 
-### `PI: number`
+#### `PI: number`
 Archimedes' constant, π.
 
-### `TAU: number`
+#### `TAU: number`
 The full circle constant, τ, equal to 2π.
 
-### `C4`, `A4`, `G♯5`, `[A-G][♯♭sf]?[0-9]: hertz`
+#### `C4`, `A4`, `G♯5`, `[A-G][♯♭sf]?[0-9]: hertz`
 Piano key frequencies,
 in [scientific pitch notation](https://en.wikipedia.org/wiki/Scientific_pitch_notation).
 
