@@ -2,7 +2,7 @@ sound main() {
     let len: seconds = 1/4
     for note in [C4, D4, E4, F4, G4, A4, B4, C5] {
         play(note, len)
-        skip(len * SAMPLE_RATE)
+        wait(len)
     }
     let maj = [0st, 2st, 2st, 1st, 2st, 2st, 2st, 1st]
     for root in [C4, D4, E4] {
@@ -10,7 +10,7 @@ sound main() {
         for interval: semitones in maj {
             set! note = note + interval
             play(note, len)
-            skip(len * SAMPLE_RATE)
+            wait(len)
         }
     }
 }

@@ -132,6 +132,11 @@ extern "C" fn yhim_skip(this: &mut SoundRecv, by: f64) {
 }
 
 #[no_mangle]
+extern "C" fn yhim_wait(this: &mut SoundRecv, time: f64) {
+    this.pos += (time * SAMPLE_RATE as f64) as u64;
+}
+
+#[no_mangle]
 extern "C" fn yhim_next(this: &mut SoundRecv) {
     this.pos += 1;
 }
@@ -150,6 +155,7 @@ pub fn add_symbols() {
         yhim_pan,
         yhim_mix,
         yhim_skip,
+        yhim_wait,
         yhim_next
     ] {
         unsafe {

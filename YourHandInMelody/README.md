@@ -29,7 +29,7 @@ sound play(note: hz, duration: secs) {
 sound main() {
     for note in [C4, D4, E4, F4, G4, A4, B4, C5] {
         play(note, 1/4)
-        skip(1 / 4 * SAMPLE_RATE)
+        wait(1/4)
     }
     let maj = [0st, 2st, 2st, 1st, 2st, 2st, 2st, 1st]
     for root in [C4, D4, E4] {
@@ -37,7 +37,7 @@ sound main() {
         for interval: semitones in maj {
             set! note = note + interval
             play(note, 1/4)
-            skip(1 / 4 * SAMPLE_RATE)
+            wait(1/4)
         }
     }
 }
@@ -68,6 +68,7 @@ Read on for documentation and examples.
         * [Samples, the Sample Counter](#samples-the-sample-counter)
       - [`next()`](#next)`)
       - [`skip(n: number)`](#skipn-number)
+      - [`wait(t: seconds)`](#waitt-seconds)
       - [`sqrt(x: number): number`](#sqrtx-number-number)
       - [`sin(x: number): number`](#sinx-number-number)
       - [`cos(x: number): number`](#cosx-number-number)
@@ -143,7 +144,8 @@ sound baz(s: num, phase: num) {
     mix(s)
     mix(bar(440) at phase) // an oscillator can be sampled at a phase
     // the next() function proceeds to the next sample,
-    // alternatively the skip(n) function skips ahead n samples
+    // alternatively the skip(n) function skips ahead n samples,
+    // and wait(t) skips ahead t seconds of samples
     next()
     // other sound functions can (only) be called from sound functions;
     // they will start at the current sample, but execute "asynchronously",
@@ -331,6 +333,13 @@ and calls to other `sound` functions will start at the new sample counter.
 Available in `sound` functions.
 
 Increment the [sample counter] by `n`, rounded down.
+
+#### `wait(t: seconds)`
+Available in `sound` functions.
+
+Increment the [sample counter] by `t` times [`SAMPLE_RATE`](#sample_rate-hertz--44100), rounded down.
+
+This is equivalent to `skip(t * SAMPLE_RATE)`.
 
 #### `sqrt(x: number): number`
 Returns the square root of `x`.

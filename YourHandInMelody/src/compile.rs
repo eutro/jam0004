@@ -992,6 +992,7 @@ impl Compiler {
             fn (SoundRecvTy) mix(SampleTy) -> (),
             fn (SoundRecvTy) next() -> (),
             fn (SoundRecvTy) skip(f64) -> (),
+            fn (SoundRecvTy) wait(f64:Seconds) -> (),
         );
         if let Some(f) = self.funcs.get(name) {
             if args.len() != f.params.len() {

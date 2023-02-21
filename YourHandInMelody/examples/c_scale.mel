@@ -2,11 +2,11 @@ sound main() {
     let len: seconds = 1/4
     for note in [C4, D4, E4, F4, G4, A4, B4, C5] {
         play(note, len)
-        skip(len * SAMPLE_RATE)
+        wait(len)
     }
-    skip(1 * SAMPLE_RATE)
+    wait(1)
     for note in [C4, D4, E♭4, F4, G4, A♭4, B4, C5] {
         play(note, len)
-        skip(len * SAMPLE_RATE)
+        wait(len)
     }
 }
