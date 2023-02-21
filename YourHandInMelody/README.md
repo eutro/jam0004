@@ -115,7 +115,7 @@ Your Hand in Melody (YHiM) is a music scripting language with a type system that
 you catch bugs, metaphorically leaving one hand free to deal with other things.
 
 A YHiM program can be executed if it has a `main()` sound function, which will be played.
-[sample counter] counter is also an essential read.
+[Sample counter][sample counter] is also an essential read.
 I highly recommend [VLC Media Player](https://www.videolan.org/vlc/) for playing the generated
 audio files, since it automatically reopens them if they change.
 
